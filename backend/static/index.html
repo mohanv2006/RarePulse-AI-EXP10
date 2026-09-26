@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RarePulse AI | Longitudinal Rare Disease Detection</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              teal: '#0d9488',
+              cyan: '#06b6d4'
+            },
+            clinical: {
+              bg: '#0b0f17',
+              card: '#111827',
+              border: '#1f2937',
+              hover: '#1e293b',
+              textMuted: '#94a3b8'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons & Chart.js CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f17;
+      color: #f1f5f9;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .glow-teal {
+      box-shadow: 0 0 20px -5px rgba(13, 148, 136, 0.35);
+    }
+    .glow-red {
+      box-shadow: 0 0 20px -5px rgba(239, 68, 68, 0.35);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex bg-clinical-bg text-slate-100 antialiased selection:bg-brand-teal selection:text-white">
+
+  <!-- Left Sidebar Navigation -->
+  <aside class="w-64 border-r border-clinical-border bg-clinical-card flex flex-col justify-between hidden md:flex shrink-0">
+    <div>
+      <!-- Brand Header -->
+      <div class="p-5 border-b border-clinical-border flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-brand-600 to-cyan-500 flex items-center justify-center text-white shadow-lg glow-teal">
+          <i data-lucide="activity" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
+            RarePulse <span class="text-xs px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 font-mono font-medium">AI</span>
+          </h1>
+          <p class="text-[11px] text-slate-400">Longitudinal EHR CDSS</p>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="p-3 space-y-1.5 text-sm">
+        <button onclick="navigate('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium transition-all text-brand-400 bg-brand-500/10 border border-brand-500/20">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          Clinical Dashboard
+        </button>
+
+        <button onclick="navigate('patient-view')" id="nav-patient-view" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white hover:bg-clinical-hover">
+          <i data-lucide="git-commit" class="w-4 h-4"></i>
+          Patient Trajectory & XAI
+        </button>
+
+        <button onclick="navigate('metrics')" id="nav-metrics" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white hover:bg-clinical-hover">
+          <i data-lucide="line-chart" class="w-4 h-4"></i>
+          Model Diagnostics
+        </button>
+
+        <button onclick="navigate('simulate')" id="nav-simulate" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white hover:bg-clinical-hover">
+          <i data-lucide="file-input" class="w-4 h-4"></i>
+          EHR Ingestion Simulator
+        </button>
+      </nav>
+    </div>
+
+    <!-- System Status & Model Card Info -->
+    <div class="p-4 border-t border-clinical-border bg-slate-950/40 text-xs">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-slate-400 font-medium">Model Architecture</span>
+        <span class="text-brand-400 font-mono">GRU + Attn</span>
+      </div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-slate-400 font-medium">Loss Function</span>
+        <span class="text-cyan-400 font-mono">Binary Focal</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 font-medium">Status</span>
+        <span class="inline-flex items-center gap-1 text-emerald-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Online (1k EHRs)
+        </span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+    
+    <!-- Top Header Bar -->
+    <header class="h-16 border-b border-clinical-border bg-clinical-card/80 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-30">
+      <div class="flex items-center gap-4">
+        <h2 id="page-title" class="text-lg font-semibold text-white flex items-center gap-2">
+          Clinical Surveillance Dashboard
+        </h2>
+        <span class="hidden sm:inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+          Cohort Imbalance: 1.5% Rare Disease Prevalence
+        </span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button onclick="triggerSimulateAmyloidosis()" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-500/20 text-brand-300 border border-brand-500/30 hover:bg-brand-500/30 transition">
+          <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+          Simulate ATTR Case
+        </button>
+        <div class="h-8 w-px bg-clinical-border hidden md:block"></div>
+        <div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
+          <i data-lucide="shield-check" class="w-4 h-4 text-brand-400"></i>
+          HIPAA De-identified Demo
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Views Container -->
+    <div class="p-6 space-y-6 max-w-7xl mx-auto w-full">
+
+      <!-- ================================================================= -->
+      <!-- VIEW 1: CLINICAL DASHBOARD -->
+      <!-- ================================================================= -->
+      <section id="view-dashboard" class="space-y-6">
+        
+        <!-- KPI Metrics Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- KPI 1 -->
+          <div class="bg-clinical-card border border-clinical-border p-5 rounded-xl">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-xs font-medium uppercase tracking-wider">Patients Screened</span>
+              <i data-lucide="users" class="w-4 h-4 text-slate-400"></i>
+            </div>
+            <div class="text-2xl font-bold text-white font-mono" id="kpi-total-screened">1,000</div>
+            <p class="text-[11px] text-slate-400 mt-1">5-Year Longitudinal Cohort</p>
+          </div>
+
+          <!-- KPI 2 -->
+          <div class="bg-clinical-card border border-rose-900/40 p-5 rounded-xl glow-red">
+            <div class="flex items-center justify-between text-rose-400 mb-2">
+              <span class="text-xs font-medium uppercase tracking-wider">Flagged High-Risk Cases</span>
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i>
+            </div>
+            <div class="text-2xl font-bold text-rose-400 font-mono" id="kpi-flagged-cases">15</div>
+            <p class="text-[11px] text-rose-300/70 mt-1">Prevalence: <span class="font-semibold text-rose-300">1.50%</span> (Extreme Imbalance)</p>
+          </div>
+
+          <!-- KPI 3 -->
+          <div class="bg-clinical-card border border-clinical-border p-5 rounded-xl">
+            <div class="flex items-center justify-between text-brand-400 mb-2">
+              <span class="text-xs font-medium uppercase tracking-wider">Avg Detection Lead Time</span>
+              <i data-lucide="clock" class="w-4 h-4 text-brand-400"></i>
+            </div>
+            <div class="text-2xl font-bold text-brand-400 font-mono" id="kpi-lead-time">2.7 Years</div>
+            <p class="text-[11px] text-slate-400 mt-1">Earlier than traditional diagnostic odyssey</p>
+          </div>
+
+          <!-- KPI 4 -->
+          <div class="bg-clinical-card border border-clinical-border p-5 rounded-xl">
+            <div class="flex items-center justify-between text-cyan-400 mb-2">
+              <span class="text-xs font-medium uppercase tracking-wider">Model PR-AUC</span>
+              <i data-lucide="target" class="w-4 h-4 text-cyan-400"></i>
+            </div>
+            <div class="text-2xl font-bold text-cyan-400 font-mono" id="kpi-prauc">0.9850</div>
+            <p class="text-[11px] text-slate-400 mt-1">Balanced Accuracy: <span class="text-slate-200 font-semibold" id="kpi-bal-acc">99.2%</span></p>
+          </div>
+        </div>
+
+        <!-- Target Rare Diseases Surveillance Banner -->
+        <div class="bg-gradient-to-r from-slate-900 via-slate-900 to-teal-950/40 border border-teal-800/40 rounded-xl p-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-start gap-3">
+              <div class="p-2 rounded-lg bg-teal-500/10 text-brand-400 mt-0.5">
+                <i data-lucide="dna" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-semibold text-white">Target Rare Disease Surveillance Models Active</h3>
+                <p class="text-xs text-slate-400">Detecting multi-year prodromes for Transthyretin Amyloidosis (ATTR), Fabry Disease, and Systemic Sclerosis.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">ATTR ~3.4 yrs saved</span>
+              <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">Fabry ~5.1 yrs saved</span>
+              <span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">Sclero ~3.7 yrs saved</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Patient Risk Roster Table Card -->
+        <div class="bg-clinical-card border border-clinical-border rounded-xl overflow-hidden">
+          
+          <!-- Table Filters & Search Bar -->
+          <div class="p-4 border-b border-clinical-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-1">
+              <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input 
+                  type="text" 
+                  id="search-input" 
+                  oninput="handleSearch(this.value)"
+                  placeholder="Search by Patient ID, Name, or Condition..." 
+                  class="w-full pl-9 pr-4 py-2 bg-slate-950 border border-clinical-border rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition"
+                >
+              </div>
+
+              <!-- Risk Tier Filter -->
+              <select id="filter-risk" onchange="loadPatientsTable()" class="bg-slate-950 border border-clinical-border rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-brand-500">
+                <option value="All">All Risk Tiers</option>
+                <option value="High Risk" selected>High Risk (>70%)</option>
+                <option value="Moderate Risk">Moderate Risk</option>
+                <option value="Low Risk">Low Risk</option>
+              </select>
+
+              <!-- Condition Filter -->
+              <select id="filter-condition" onchange="loadPatientsTable()" class="bg-slate-950 border border-clinical-border rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-brand-500 hidden sm:block">
+                <option value="All">All Conditions</option>
+                <option value="Transthyretin Amyloidosis (ATTR)">ATTR Amyloidosis</option>
+                <option value="Fabry Disease">Fabry Disease</option>
+                <option value="Systemic Sclerosis (Scleroderma)">Systemic Sclerosis</option>
+              </select>
+            </div>
+
+            <div class="text-xs text-slate-400 flex items-center gap-2">
+              <span id="patient-count-badge" class="font-mono text-white font-semibold">15</span> patients shown
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-clinical-border">
+                <tr>
+                  <th class="py-3 px-4">Patient ID & Name</th>
+                  <th class="py-3 px-4">Age / Sex</th>
+                  <th class="py-3 px-4">Predicted Rare Disease</th>
+                  <th class="py-3 px-4">Risk Probability</th>
+                  <th class="py-3 px-4">Lead Time Saved</th>
+                  <th class="py-3 px-4">Triage Status</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="patients-table-body" class="divide-y divide-clinical-border font-medium">
+                <!-- Injected by JavaScript -->
+                <tr>
+                  <td colspan="7" class="py-8 text-center text-slate-400">
+                    <i data-lucide="loader-2" class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-400"></i>
+                    Loading patient cohort...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- VIEW 2: LONGITUDINAL PATIENT TRAJECTORY & XAI -->
+      <!-- ================================================================= -->
+      <section id="view-patient" class="space-y-6 hidden">
+        
+        <!-- Patient Header Banner -->
+        <div class="bg-clinical-card border border-clinical-border rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex items-start gap-4">
+            <button onclick="navigate('dashboard')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </button>
+            <div>
+              <div class="flex items-center gap-3">
+                <h2 class="text-xl font-bold text-white font-mono" id="detail-patient-id">PAT-0962</h2>
+                <span id="detail-risk-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                  97.2% Risk (Critical Alert)
+                </span>
+                <span id="detail-triage-badge" class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Review Needed
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">
+                <span id="detail-patient-name" class="text-slate-200 font-semibold">Eleanor Vance</span> | 
+                <span id="detail-patient-meta">58 y/o Female</span> | 
+                Attending: <span id="detail-physician" class="text-slate-300">Dr. Sarah Lin, MD (Cardiology)</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Triage Action Dropdown -->
+          <div class="flex items-center gap-2">
+            <select id="update-triage-select" class="bg-slate-950 border border-clinical-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500">
+              <option value="Review Needed">Review Needed</option>
+              <option value="Under Specialist Review">Under Specialist Review</option>
+              <option value="Genetic Testing Ordered">Genetic Testing Ordered</option>
+              <option value="Confirmed Rare Disease">Confirmed Rare Disease</option>
+              <option value="Dismissed / Normal">Dismissed / False Positive</option>
+            </select>
+            <button onclick="saveTriageStatus()" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-brand-600 text-white hover:bg-brand-500 transition shadow">
+              Update Status
+            </button>
+          </div>
+        </div>
+
+        <!-- Diagnostic Odyssey Comparison Card -->
+        <div class="bg-gradient-to-br from-slate-900 via-clinical-card to-slate-900 border border-clinical-border rounded-xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="compass" class="w-4 h-4 text-cyan-400"></i>
+              Diagnostic Odyssey Comparison
+            </h3>
+            <span class="text-xs font-mono text-brand-400 font-semibold" id="odyssey-lead-time-tag">
+              Early Detection Window: 3.4 Years Ahead
+            </span>
+          </div>
+
+          <div class="space-y-4">
+            <!-- Standard Timeline -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-400">Standard Clinical Diagnostic Odyssey (Late Diagnosis)</span>
+                <span class="text-rose-400 font-mono font-semibold" id="standard-odyssey-val">~6.2 Years</span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-full h-3 border border-slate-800 overflow-hidden">
+                <div class="bg-rose-500/60 h-full rounded-full" style="width: 100%;"></div>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-1">Diagnosis typically occurs only after irreversible end-stage organ damage.</p>
+            </div>
+
+            <!-- RarePulse Timeline -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-brand-300 font-medium">RarePulse AI Early Detection Point</span>
+                <span class="text-brand-400 font-mono font-bold" id="rarepulse-detection-val">~2.8 Years (Year 3)</span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-full h-3 border border-slate-800 overflow-hidden">
+                <div class="bg-gradient-to-r from-brand-500 to-cyan-400 h-full rounded-full glow-teal" id="rarepulse-progress-bar" style="width: 45%;"></div>
+              </div>
+              <p class="text-[11px] text-emerald-400/90 mt-1 font-medium">Flags early prodrome before severe organ failure, enabling disease-modifying therapies.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explainable AI (XAI) & Attention Attribution Breakdown -->
+        <div class="bg-clinical-card border border-clinical-border rounded-xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+                Explainable AI (XAI): Visit-Level Attention Attribution
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">Bahdanau additive attention weights pinpointing the most influential historical visits.</p>
+            </div>
+            <span class="text-xs px-2.5 py-1 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
+              Top 2 Key Trigger Encounters Highlighted
+            </span>
+          </div>
+
+          <div id="attention-breakdown-container" class="space-y-3">
+            <!-- Injected by JS -->
+          </div>
+        </div>
+
+        <!-- Interactive 5-Year Care Timeline Visualizer -->
+        <div class="bg-clinical-card border border-clinical-border rounded-xl p-6">
+          <h3 class="text-sm font-semibold text-white flex items-center gap-2 mb-6">
+            <i data-lucide="calendar" class="w-4 h-4 text-teal-400"></i>
+            Longitudinal 5-Year Encounter Timeline
+          </h3>
+
+          <div id="timeline-encounters-container" class="relative pl-6 space-y-6 border-l-2 border-slate-800">
+            <!-- Injected by JS -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- VIEW 3: MODEL DIAGNOSTICS & METRICS -->
+      <!-- ================================================================= -->
+      <section id="view-metrics" class="space-y-6 hidden">
+        
+        <!-- Metrics Summary Header -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-clinical-card border border-clinical-border p-5 rounded-xl">
+            <span class="text-xs font-medium text-slate-400 uppercase">PR-AUC (Precision-Recall)</span>
+            <div class="text-3xl font-bold text-cyan-400 font-mono mt-1" id="metrics-prauc">0.9850</div>
+            <p class="text-xs text-slate-400 mt-2">Essential metric for 1:100 imbalance</p>
+          </div>
+          <div class="bg-clinical-card border border-clinical-border p-5 rounded-xl">
+            <span class="text-xs font-medium text-slate-400 uppercase">ROC-AUC Score</span>
+            <div class="text-3xl font-bold text-brand-400 font-mono mt-1" id="metrics-rocauc">0.9982</div>
+            <p class="text-xs text-slate-400 mt-2">Overall discriminatory power</p>
+          </div>
+          <div class="bg-clinical-card border border-clinical-border p-5 rounded-xl">
+            <span class="text-xs font-medium text-slate-400 uppercase">Balanced Accuracy</span>
+            <div class="text-3xl font-bold text-indigo-400 font-mono mt-1" id="metrics-balacc">99.20%</div>
+            <p class="text-xs text-slate-400 mt-2">Macro-averaged class sensitivity</p>
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          <!-- Precision-Recall Curve -->
+          <div class="bg-clinical-card border border-clinical-border rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+              <i data-lucide="trending-up" class="w-4 h-4 text-cyan-400"></i>
+              Precision-Recall Curve (PR-AUC)
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Under 1.5% extreme class imbalance, standard accuracy is misleading. PR-AUC validates rare disease precision.</p>
+            <div class="h-64">
+              <canvas id="pr-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Confusion Matrix Visualizer -->
+          <div class="bg-clinical-card border border-clinical-border rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+              <i data-lucide="grid" class="w-4 h-4 text-brand-400"></i>
+              Confusion Matrix (1,000 Patient Cohort)
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Threshold = 0.50 | 15 Rare Disease Cases vs 985 Non-Rare Controls</p>
+            
+            <div class="grid grid-cols-2 gap-3 max-w-sm mx-auto mt-6 text-center">
+              <div class="bg-slate-900 border border-slate-800 p-4 rounded-lg">
+                <span class="text-[11px] text-slate-400 uppercase block font-semibold">True Negatives</span>
+                <span class="text-2xl font-bold text-slate-200 font-mono" id="cm-tn">984</span>
+              </div>
+              <div class="bg-slate-900 border border-rose-900/40 p-4 rounded-lg">
+                <span class="text-[11px] text-rose-400 uppercase block font-semibold">False Positives</span>
+                <span class="text-2xl font-bold text-rose-400 font-mono" id="cm-fp">1</span>
+              </div>
+              <div class="bg-slate-900 border border-amber-900/40 p-4 rounded-lg">
+                <span class="text-[11px] text-amber-400 uppercase block font-semibold">False Negatives</span>
+                <span class="text-2xl font-bold text-amber-400 font-mono" id="cm-fn">0</span>
+              </div>
+              <div class="bg-slate-900 border border-emerald-900/50 p-4 rounded-lg glow-teal">
+                <span class="text-[11px] text-emerald-400 uppercase block font-semibold">True Positives</span>
+                <span class="text-2xl font-bold text-emerald-400 font-mono" id="cm-tp">15</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Focal Loss vs Cross-Entropy Clinical Impact -->
+        <div class="bg-clinical-card border border-clinical-border rounded-xl p-6">
+          <h3 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
+            <i data-lucide="zap" class="w-5 h-5 text-amber-400"></i>
+            Mathematical Impact: Binary Focal Loss vs Standard Cross-Entropy
+          </h3>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-2">
+              <h4 class="text-xs font-semibold text-rose-400 uppercase tracking-wider">Standard Binary Cross-Entropy (BCE)</h4>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                $$\mathcal{L}_{\text{BCE}} = -y \log(p) - (1-y) \log(1-p)$$
+                When 98.5% of samples are easy negatives, their accumulated gradients dominate model optimization, causing the neural network to output near-zero probabilities and miss rare prodromes.
+              </p>
+              <div class="text-xs font-mono text-rose-300/80 pt-2">Baseline PR-AUC: ~0.412</div>
+            </div>
+
+            <div class="bg-slate-950 p-4 rounded-lg border border-teal-800/40 space-y-2 glow-teal">
+              <h4 class="text-xs font-semibold text-brand-400 uppercase tracking-wider">RarePulse Binary Focal Loss ($\alpha=0.85, \gamma=2.0$)</h4>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                $$\text{FL}(p_t) = -\alpha_t (1 - p_t)^\gamma \log(p_t)$$
+                The modulating factor $(1 - p_t)^\gamma$ automatically suppresses the gradient contributions of easy negatives by up to $100\times$, focusing gradient descent on subtle multi-year longitudinal trajectories.
+              </p>
+              <div class="text-xs font-mono text-brand-400 pt-2 font-bold">RarePulse PR-AUC: 0.985+</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- VIEW 4: EHR DATA INGESTION & SIMULATOR -->
+      <!-- ================================================================= -->
+      <section id="view-simulate" class="space-y-6 hidden">
+        
+        <div class="bg-clinical-card border border-clinical-border rounded-xl p-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-clinical-border pb-4 mb-6">
+            <div>
+              <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                <i data-lucide="file-input" class="w-5 h-5 text-brand-400"></i>
+                Real-Time EHR Longitudinal Simulator & Inference
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">Load clinical preset templates or manually construct multi-year encounters to test real-time attention attribution.</p>
+            </div>
+
+            <!-- Preset Loaders -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs text-slate-400">Load Preset:</span>
+              <button onclick="loadSimulationPreset('amyloidosis')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-teal-500/20 text-teal-300 border border-teal-500/30 hover:bg-teal-500/30 transition">
+                ATTR Amyloidosis
+              </button>
+              <button onclick="loadSimulationPreset('fabry')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition">
+                Fabry Disease
+              </button>
+              <button onclick="loadSimulationPreset('scleroderma')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 transition">
+                Systemic Sclerosis
+              </button>
+              <button onclick="loadSimulationPreset('control')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                Normal Control
+              </button>
+            </div>
+          </div>
+
+          <!-- Patient Metadata Inputs -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div>
+              <label class="text-xs font-medium text-slate-300 block mb-1">Simulated Patient Name</label>
+              <input type="text" id="sim-name" value="Julian Montgomery" class="w-full bg-slate-950 border border-clinical-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-300 block mb-1">Age</label>
+              <input type="number" id="sim-age" value="62" class="w-full bg-slate-950 border border-clinical-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-300 block mb-1">Gender</label>
+              <select id="sim-gender" class="w-full bg-slate-950 border border-clinical-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Encounters List -->
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Multi-Year Chronological Encounters</h4>
+              <button onclick="addSimulatedEncounterRow()" class="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 text-slate-200 hover:bg-slate-700 transition flex items-center gap-1">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Encounter
+              </button>
+            </div>
+
+            <div id="sim-encounters-list" class="space-y-3">
+              <!-- Injected by JS -->
+            </div>
+          </div>
+
+          <!-- Submit Trigger Button -->
+          <div class="mt-6 pt-4 border-t border-clinical-border flex justify-end">
+            <button onclick="executeSimulationInference()" class="px-5 py-2.5 rounded-lg text-xs font-bold bg-gradient-to-r from-brand-600 to-cyan-600 text-white hover:opacity-95 transition shadow-lg glow-teal flex items-center gap-2">
+              <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+              Execute Real-Time Neural Inference
+            </button>
+          </div>
+        </div>
+
+        <!-- Simulation Results Card -->
+        <div id="sim-results-card" class="bg-clinical-card border border-clinical-border rounded-xl p-6 hidden">
+          <h3 class="text-base font-semibold text-white mb-4 flex items-center gap-2">
+            <i data-lucide="check-circle-2" class="w-5 h-5 text-brand-400"></i>
+            Live Neural Inference Output & Attention Rationale
+          </h3>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
+              <span class="text-xs text-slate-400 uppercase">Predicted Probability</span>
+              <div class="text-3xl font-bold font-mono text-brand-400 mt-1" id="sim-res-prob">--</div>
+            </div>
+            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
+              <span class="text-xs text-slate-400 uppercase">Risk Tier</span>
+              <div class="text-2xl font-bold font-mono mt-1" id="sim-res-tier">--</div>
+            </div>
+            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
+              <span class="text-xs text-slate-400 uppercase">Likely Rare Condition</span>
+              <div class="text-lg font-bold text-slate-200 mt-1" id="sim-res-condition">--</div>
+            </div>
+          </div>
+
+          <!-- Simulation Attention Breakdown -->
+          <div>
+            <h4 class="text-xs font-semibold text-slate-300 uppercase mb-3">Visit Attention Attribution Scores:</h4>
+            <div id="sim-res-attributions" class="space-y-2">
+              <!-- Injected by JS -->
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Load Application JS -->
+  <script src="/static/app.js"></script>
+  <script>
+    // Initialize Lucide Icons on load
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
